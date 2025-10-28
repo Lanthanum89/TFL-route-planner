@@ -124,6 +124,10 @@ class LondonUndergroundApp:
         ttk.Checkbutton(options_frame, text="Step-by-step directions", 
                        variable=self.show_step_by_step).pack(anchor='w')
         
+        self.colorize_legs = tk.BooleanVar(value=True)
+        ttk.Checkbutton(options_frame, text="Colorize legs by line", 
+                       variable=self.colorize_legs).pack(anchor='w')
+        
     def create_results_section(self, parent):
         """Create results display section"""
         results_frame = tk.Frame(parent, bg='white')
@@ -250,36 +254,76 @@ Ready to plan your journey?"""
                                 font=('Arial', 11, 'bold'), bg='#f0f0f0')
         summary_label.pack(pady=5)
         
-        # Detailed route
-        route_details = self.tube_network.get_route_details(route)
-        
-        output = f"🚇 ROUTE DETAILS\n"
-        output += "=" * 50 + "\n\n"
-        
-        for i, detail in enumerate(route_details, 1):
-            output += f"{i}. {detail}\n"
+        # Detailed route header
+        header = f"🚇 ROUTE DETAILS\n" + ("=" * 50) + "\n\n"
+        self.route_text.insert(tk.END, header)
+
+        # Structured legs for colorized rendering
+        legs = self.tube_network.get_route_legs(route)
+        for i, (line_name, leg_start, leg_end, stops) in enumerate(legs, 1):
+            if line_name == 'Walk':
+                line_text = f"{i}. Walk from {leg_start} to {leg_end} ({stops} stops)\n"
+            else:
+                line_text = f"{i}. Take {line_name} Line from {leg_start} to {leg_end} ({stops} stops)\n"
+
+            start_index = self.route_text.index(tk.END)
+            self.route_text.insert(tk.END, line_text)
+            end_index = self.route_text.index(tk.END)
+
+            if self.colorize_legs.get():
+                tag = self._line_to_tag(line_name)
+                self._ensure_line_tag(line_name)
+                self.route_text.tag_add(tag, start_index, end_index)
             
         if self.show_step_by_step.get():
-            output += "\n" + "=" * 50 + "\n"
-            output += "STEP-BY-STEP DIRECTIONS:\n\n"
-            
+            section_header = "\n" + ("=" * 50) + "\n" + "STEP-BY-STEP DIRECTIONS:\n\n"
+            self.route_text.insert(tk.END, section_header)
             for i, station in enumerate(route):
                 if i == 0:
-                    output += f"🚀 START: Board at {station}\n"
+                    self.route_text.insert(tk.END, f"🚀 START: Board at {station}\n")
                 elif i == len(route) - 1:
-                    output += f"🎯 END: Alight at {station}\n"
+                    self.route_text.insert(tk.END, f"🎯 END: Alight at {station}\n")
                 else:
                     lines = self.tube_network.get_station_lines(station)
                     if len(lines) > 1 and self.show_interchanges.get():
-                        output += f"🔄 INTERCHANGE: {station} (Lines: {', '.join(lines)})\n"
+                        self.route_text.insert(tk.END, f"🔄 INTERCHANGE: {station} (Lines: {', '.join(lines)})\n")
                     else:
-                        output += f"   → {station}\n"
-        
-        output += "\n" + "=" * 50 + "\n"
-        output += "💡 TIP: Check TfL website for live service updates\n"
-        output += "🌐 Future version will include live API integration"
-        
-        self.route_text.insert(1.0, output)
+                        self.route_text.insert(tk.END, f"   → {station}\n")
+
+        footer = "\n" + ("=" * 50) + "\n" + "💡 TIP: Check TfL website for live service updates\n" + "🌐 Future version will include live API integration"
+        self.route_text.insert(tk.END, footer)
+
+    def _line_to_tag(self, line_name: str) -> str:
+        safe = ''.join(ch if ch.isalnum() else '_' for ch in (line_name or 'Unknown'))
+        return f"line_{safe}"
+
+    def _ensure_line_tag(self, line_name: str):
+        tag = self._line_to_tag(line_name)
+        if tag in self.route_text.tag_names():
+            return
+        # Choose colors
+        if line_name == 'Walk':
+            bg = '#888888'
+        else:
+            bg = self.tube_network.line_colors.get(line_name, '#666666')
+        fg = self._contrast_text_color(bg)
+        self.route_text.tag_configure(tag, background=bg, foreground=fg)
+
+    def _contrast_text_color(self, hex_color: str) -> str:
+        """Return '#000000' or '#FFFFFF' depending on background luminance for contrast."""
+        try:
+            hc = hex_color.lstrip('#')
+            r = int(hc[0:2], 16)
+            g = int(hc[2:4], 16)
+            b = int(hc[4:6], 16)
+        except Exception:
+            return '#FFFFFF'
+        # Relative luminance (sRGB)
+        def srgb(c):
+            c = c / 255.0
+            return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+        L = 0.2126 * srgb(r) + 0.7152 * srgb(g) + 0.0722 * srgb(b)
+        return '#000000' if L > 0.6 else '#FFFFFF'
         
     def clear_route(self):
         """Clear route selection and results"""

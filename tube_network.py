@@ -125,36 +125,54 @@ class TubeNetwork:
         if not route or len(route) < 2:
             return []
         
+        # Build via structured legs, then render text
+        legs = self.get_route_legs(route)
         details = []
-        current_line = None
-        leg_start = route[0]
-        
+        for line, start, end, stops in legs:
+            if line == 'Walk':
+                details.append(f"Walk from {start} to {end} ({stops} stops)")
+            else:
+                details.append(f"Take {line} Line from {start} to {end} ({stops} stops)")
+        return details
+
+    def get_route_legs(self, route: List[str]) -> List[Tuple[str, str, str, int]]:
+        """Return a structured list of legs as (line, start_station, end_station, stops).
+        Stops count is number of edges between start and end in that leg.
+        """
+        if not route or len(route) < 2:
+            return []
+
         def line_between(a: str, b: str) -> Optional[str]:
-            for neighbor, line, time in self.graph[a]:
+            for neighbor, line, _ in self.graph[a]:
                 if neighbor == b:
                     return line
             return None
-        
-        for i in range(len(route)-1):
-            a, b = route[i], route[i+1]
+
+        legs: List[Tuple[str, str, str, int]] = []
+        current_line: Optional[str] = None
+        leg_start_idx = 0
+
+        for i in range(len(route) - 1):
+            a, b = route[i], route[i + 1]
             line = line_between(a, b)
             if line is None:
                 continue
-            
             if current_line is None:
                 current_line = line
-            
             if line != current_line:
-                # Close previous leg
-                stops = route.index(a) - route.index(leg_start)
-                details.append(f"Take {current_line} Line from {leg_start} to {a} ({stops} stops)")
-                leg_start = a
+                # close previous leg ending at station a
+                start = route[leg_start_idx]
+                end = a
+                stops = i - leg_start_idx
+                legs.append((current_line, start, end, stops))
+                # start new leg from a
+                leg_start_idx = i
                 current_line = line
-        
-        # Final leg
-        stops = route.index(route[-1]) - route.index(leg_start)
-        details.append(f"Take {current_line} Line from {leg_start} to {route[-1]} ({stops} stops)")
-        
-        # Replace 'Walk' wording
-        details = [d.replace('Take Walk Line', 'Walk') for d in details]
-        return details
+
+        # finalize last leg to the last station
+        start = route[leg_start_idx]
+        end = route[-1]
+        stops = (len(route) - 1) - leg_start_idx
+        legs.append((current_line if current_line else 'Unknown', start, end, stops))
+
+        return legs
