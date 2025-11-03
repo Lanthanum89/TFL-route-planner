@@ -85,7 +85,18 @@ class LondonUndergroundApp:
         self.from_combo = ttk.Combobox(route_frame, textvariable=self.from_var, 
                                       style='Custom.TCombobox', width=30)
         self.from_combo['values'] = sorted(self.tube_network.get_all_stations())
-        self.from_combo.pack(fill='x', pady=(0, 15))
+        self.from_combo.pack(fill='x', pady=(0, 10))
+        
+        # Swap button
+        swap_frame = tk.Frame(route_frame, bg='white')
+        swap_frame.pack(fill='x', pady=(0, 10))
+        
+        swap_button = tk.Button(swap_frame, text="⇄", 
+                               command=self.swap_stations,
+                               bg='#0098D4', fg='white', 
+                               font=('Arial', 14, 'bold'),
+                               relief='flat', width=3, height=1)
+        swap_button.pack()
         
         # To station
         ttk.Label(route_frame, text="To:", font=('Arial', 11, 'bold')).pack(anchor='w', pady=(0, 5))
@@ -324,6 +335,21 @@ Ready to plan your journey?"""
             return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
         L = 0.2126 * srgb(r) + 0.7152 * srgb(g) + 0.0722 * srgb(b)
         return '#000000' if L > 0.6 else '#FFFFFF'
+    
+    def swap_stations(self):
+        """Swap the From and To station selections"""
+        from_station = self.from_var.get()
+        to_station = self.to_var.get()
+        
+        # Swap the values
+        self.from_var.set(to_station)
+        self.to_var.set(from_station)
+        
+        # Update status
+        if from_station and to_station:
+            self.status_var.set(f"Swapped: {to_station} ⇄ {from_station}")
+        else:
+            self.status_var.set("Stations swapped")
         
     def clear_route(self):
         """Clear route selection and results"""
