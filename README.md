@@ -1,6 +1,6 @@
 # London Underground Route Planner
 
-A comprehensive GUI application built with Python and tkinter for planning routes on the London Underground. Features an extensive network dataset covering 103+ stations across all major lines, with intelligent routing and colourised visual output.
+A comprehensive route planner for the London Underground, available as an installable, offline-capable **PWA** (HTML/CSS/JS) and as the original Python/tkinter desktop app. Features an extensive network dataset covering 103+ stations across all major lines, with intelligent routing and colourised visual output.
 
 ## ✨ Features
 
@@ -35,23 +35,41 @@ The app features a clean, modern interface with colourised route display and con
 
 ## 🚀 Getting started
 
-### Prerequisites
+### PWA (recommended)
 
-- Python 3.9+
-- tkinter (included with most Python distributions on Windows/macOS)
-
-### Quick Start
+No install, no build step — it's a static site.
 
 ```bash
 # Clone or download the repository
 git clone https://github.com/Lanthanum89/TFL-route-planner.git
 cd TFL-route-planner
 
+# Serve the files (service workers require http/https, not file://)
+python3 -m http.server 8000
+# then open http://localhost:8000/index.html
+```
+
+Open it in Chrome/Edge on desktop or mobile and use the "Install app" / "Add to Home Screen" prompt to install it. Once loaded once, it keeps working offline.
+
+- `index.html`, `styles.css`, `app.js` — UI shell and interaction logic
+- `tube-network.js` — network graph, BFS routing, and route-leg formatting (JS port of `tube_network.py`)
+- `manifest.json`, `service-worker.js`, `icons/` — PWA installability and offline caching
+
+### Legacy desktop app (Python/tkinter)
+
+#### Prerequisites
+
+- Python 3.9+
+- tkinter (included with most Python distributions on Windows/macOS)
+
+#### Quick Start
+
+```bash
 # Run the application
 python main.py
 ```
 
-### Optional: Virtual Environment
+#### Optional: Virtual Environment
 
 ```bash
 # Windows (PowerShell)
@@ -76,8 +94,15 @@ python main.py
 
 ## 🏗️ Project Structure
 
+**PWA:**
+- `index.html` / `styles.css` / `app.js` — Web UI and interaction logic
+- `tube-network.js` — Underground network model, routing algorithms, and data structures (JS port)
+- `manifest.json` / `service-worker.js` / `icons/` — Installability and offline support
+
+**Legacy desktop app:**
 - `main.py` — Main GUI application with tkinter interface and user interactions
-- `tube_network.py` — Underground network model, routing algorithms, and data structures  
+- `tube_network.py` — Underground network model, routing algorithms, and data structures
+
 - `README.md` — This documentation file
 
 ## 🧠 How It Works
