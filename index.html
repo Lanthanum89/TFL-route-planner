@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>London Underground Route Planner</title>
+<meta name="description" content="Plan routes on the London Underground with colour-coded lines and step-by-step directions.">
+<meta name="theme-color" content="#003366">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon.svg">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="title-bar">
+    <h1>🚇 London Underground Route Planner</h1>
+</header>
+
+<main class="content">
+    <section class="panel input-panel" aria-label="Route selection">
+        <label for="from-station">From:</label>
+        <input list="station-list" id="from-station" placeholder="Select a station" autocomplete="off">
+
+        <button id="swap-button" type="button" title="Swap stations" aria-label="Swap stations">⇄</button>
+
+        <label for="to-station">To:</label>
+        <input list="station-list" id="to-station" placeholder="Select a station" autocomplete="off">
+
+        <datalist id="station-list"></datalist>
+
+        <div class="button-row">
+            <button id="plan-button" type="button" class="primary">Plan Route</button>
+            <button id="clear-button" type="button" class="secondary">Clear</button>
+        </div>
+
+        <fieldset class="options">
+            <legend>Options</legend>
+            <label><input type="checkbox" id="opt-interchanges" checked> Show interchanges</label>
+            <label><input type="checkbox" id="opt-steps" checked> Step-by-step directions</label>
+            <label><input type="checkbox" id="opt-colorize" checked> Colourise legs by line</label>
+        </fieldset>
+    </section>
+
+    <section class="panel results-panel" aria-label="Route details">
+        <h2>Route Details</h2>
+        <div id="summary" class="summary" hidden></div>
+        <div id="route-output" class="route-output"></div>
+    </section>
+</main>
+
+<footer class="status-bar">
+    <span id="status-text">Ready - Select stations and click 'Plan Route'</span>
+</footer>
+
+<script src="tube-network.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
