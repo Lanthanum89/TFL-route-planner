@@ -1,6 +1,8 @@
 # London Underground Route Planner
 
-A comprehensive route planner for the London Underground, available as an installable, offline-capable **PWA** (HTML/CSS/JS) and as the original Python/tkinter desktop app. Features an extensive network dataset covering 103+ stations across all major lines, with intelligent routing and colourised visual output.
+A comprehensive route planner for the London Underground, available as an installable, offline-capable **PWA** (TypeScript + Vite) and as the original Python/tkinter desktop app. Features an extensive network dataset covering 103+ stations across all major lines, with intelligent routing and colourised visual output.
+
+**Live app:** https://lanthanum89.github.io/TFL-route-planner/ (deploys automatically from `main` via GitHub Actions)
 
 ## ✨ Features
 
@@ -37,23 +39,30 @@ The app features a clean, modern interface with colourised route display and con
 
 ### PWA (recommended)
 
-No install, no build step — it's a static site.
+Built with TypeScript and [Vite](https://vite.dev), deployed automatically to GitHub Pages on every push to `main`.
 
 ```bash
 # Clone or download the repository
 git clone https://github.com/Lanthanum89/TFL-route-planner.git
 cd TFL-route-planner
 
-# Serve the files (service workers require http/https, not file://)
-python3 -m http.server 8000
-# then open http://localhost:8000/index.html
+npm install
+npm run dev       # local dev server with hot reload
+npm run build      # type-checks and builds to dist/
+npm run preview    # serves the production build locally
 ```
 
-Open it in Chrome/Edge on desktop or mobile and use the "Install app" / "Add to Home Screen" prompt to install it. Once loaded once, it keeps working offline.
+Open it in Chrome/Edge on desktop or mobile and use the "Install app" / "Add to Home Screen" prompt to install it. Once loaded once, it keeps working offline (service worker precaches the app shell).
 
-- `index.html`, `styles.css`, `app.js` — UI shell and interaction logic
-- `tube-network.js` — network graph, BFS routing, and route-leg formatting (JS port of `tube_network.py`)
-- `manifest.json`, `service-worker.js`, `icons/` — PWA installability and offline caching
+- `index.html` — Vite entry point
+- `src/main.ts` — UI wiring and rendering (stat tiles, coloured line chips, step-by-step timeline)
+- `src/tube-network.ts` — network graph, BFS routing, and route-leg formatting (TS port of `tube_network.py`)
+- `src/style.css` — design system (light/dark theme, CSS variables)
+- `vite.config.ts` — build config + [`vite-plugin-pwa`](https://vite-pwa-org.netlify.app/) (manifest + service worker generation)
+- `public/icons/` — app icons (standard + maskable)
+- `.github/workflows/deploy.yml` — builds and deploys `dist/` to GitHub Pages via GitHub Actions on every push to `main`
+
+**One-time setup for deployment:** in the repo's Settings → Pages, set "Build and deployment" source to **GitHub Actions**.
 
 ### Legacy desktop app (Python/tkinter)
 
@@ -94,10 +103,14 @@ python main.py
 
 ## 🏗️ Project Structure
 
-**PWA:**
-- `index.html` / `styles.css` / `app.js` — Web UI and interaction logic
-- `tube-network.js` — Underground network model, routing algorithms, and data structures (JS port)
-- `manifest.json` / `service-worker.js` / `icons/` — Installability and offline support
+**PWA (TypeScript + Vite):**
+- `index.html` — Vite entry point
+- `src/main.ts` — UI wiring and rendering logic
+- `src/tube-network.ts` — Underground network model, routing algorithms, and data structures (TS port)
+- `src/style.css` — design system, light/dark theme
+- `vite.config.ts` / `tsconfig.json` — build and PWA (manifest + service worker) configuration
+- `public/icons/` — app icons
+- `.github/workflows/deploy.yml` — CI build + GitHub Pages deployment
 
 **Legacy desktop app:**
 - `main.py` — Main GUI application with tkinter interface and user interactions
@@ -166,8 +179,13 @@ python main.py
 
 ### Adding New Stations/Lines
 
+```typescript
+// In src/tube-network.ts, add connections:
+this.addConnection('Station A', 'Station B', 'Line Name', 2);
+```
+
 ```python
-# In tube_network.py, add connections:
+# In tube_network.py (legacy desktop app), add connections:
 self._add_connection('Station A', 'Station B', 'Line Name', time=2)
 ```
 
