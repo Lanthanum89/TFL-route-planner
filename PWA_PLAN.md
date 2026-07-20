@@ -1,5 +1,11 @@
 # PWA Conversion Plan
 
+> **Status: implemented.** The plan below describes the initial vanilla-JS conversion.
+> The app was subsequently rebuilt with TypeScript + Vite (see `src/`, `vite.config.ts`,
+> `.github/workflows/deploy.yml`) for a nicer design system and CI-driven deployment to
+> GitHub Pages. Kept here as a historical record of the original approach and reasoning
+> (the "fully client-side, no backend" decision still holds).
+
 Goal: turn the tkinter desktop app into an installable, offline-capable Progressive Web App.
 
 ## Recommended architecture: fully client-side, no backend

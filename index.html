@@ -3,56 +3,75 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>London Underground Route Planner</title>
+<title>Tube Planner — London Underground Route Planner</title>
 <meta name="description" content="Plan routes on the London Underground with colour-coded lines and step-by-step directions.">
-<meta name="theme-color" content="#003366">
-<link rel="manifest" href="manifest.json">
-<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icons/icon.svg">
-<link rel="stylesheet" href="styles.css">
+<meta name="theme-color" content="#003688" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 </head>
 <body>
-<header class="title-bar">
-    <h1>🚇 London Underground Route Planner</h1>
-</header>
-
-<main class="content">
-    <section class="panel input-panel" aria-label="Route selection">
-        <label for="from-station">From:</label>
-        <input list="station-list" id="from-station" placeholder="Select a station" autocomplete="off">
-
-        <button id="swap-button" type="button" title="Swap stations" aria-label="Swap stations">⇄</button>
-
-        <label for="to-station">To:</label>
-        <input list="station-list" id="to-station" placeholder="Select a station" autocomplete="off">
-
-        <datalist id="station-list"></datalist>
-
-        <div class="button-row">
-            <button id="plan-button" type="button" class="primary">Plan Route</button>
-            <button id="clear-button" type="button" class="secondary">Clear</button>
+<div id="app">
+    <header class="hero">
+        <div class="hero-inner">
+            <div class="brand">
+                <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
+                    <circle cx="32" cy="32" r="22" fill="none" stroke="#E32017" stroke-width="6"/>
+                    <rect x="10" y="29" width="44" height="6.5" fill="currentColor"/>
+                </svg>
+                <div>
+                    <h1>Tube Planner</h1>
+                    <p class="tagline">London Underground route planner</p>
+                </div>
+            </div>
+            <button id="theme-toggle" class="icon-button" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+                <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+            </button>
         </div>
+    </header>
 
-        <fieldset class="options">
-            <legend>Options</legend>
-            <label><input type="checkbox" id="opt-interchanges" checked> Show interchanges</label>
-            <label><input type="checkbox" id="opt-steps" checked> Step-by-step directions</label>
-            <label><input type="checkbox" id="opt-colorize" checked> Colourise legs by line</label>
-        </fieldset>
-    </section>
+    <main class="layout">
+        <section class="card planner-card" aria-label="Route selection">
+            <div class="field">
+                <label for="from-station">From</label>
+                <input list="station-list" id="from-station" placeholder="Select a station" autocomplete="off">
+            </div>
 
-    <section class="panel results-panel" aria-label="Route details">
-        <h2>Route Details</h2>
-        <div id="summary" class="summary" hidden></div>
-        <div id="route-output" class="route-output"></div>
-    </section>
-</main>
+            <button id="swap-button" type="button" class="swap-button" title="Swap stations" aria-label="Swap stations">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>
+            </button>
 
-<footer class="status-bar">
-    <span id="status-text">Ready - Select stations and click 'Plan Route'</span>
-</footer>
+            <div class="field">
+                <label for="to-station">To</label>
+                <input list="station-list" id="to-station" placeholder="Select a station" autocomplete="off">
+            </div>
 
-<script src="tube-network.js"></script>
-<script src="app.js"></script>
+            <datalist id="station-list"></datalist>
+
+            <div class="button-row">
+                <button id="plan-button" type="button" class="btn btn-primary">Plan route</button>
+                <button id="clear-button" type="button" class="btn btn-ghost">Clear</button>
+            </div>
+
+            <fieldset class="options">
+                <legend>Options</legend>
+                <label class="toggle"><input type="checkbox" id="opt-interchanges" checked><span>Show interchanges</span></label>
+                <label class="toggle"><input type="checkbox" id="opt-steps" checked><span>Step-by-step directions</span></label>
+                <label class="toggle"><input type="checkbox" id="opt-colorize" checked><span>Colourise legs by line</span></label>
+            </fieldset>
+        </section>
+
+        <section class="card results-card" aria-label="Route details">
+            <h2>Route details</h2>
+            <div id="results-body"></div>
+        </section>
+    </main>
+
+    <footer class="status-bar">
+        <span id="status-text">Ready — select stations and plan your route</span>
+    </footer>
+</div>
+<script type="module" src="/src/main.ts"></script>
 </body>
 </html>
