@@ -3,6 +3,8 @@
 
 export type Connection = [neighbor: string, line: string, time: number];
 export type Leg = [line: string, start: string, end: string, stops: number];
+/** A station reached during a route, paired with the line ridden to reach it (null for the starting station). */
+export type Step = { station: string; line: string | null };
 
 export class TubeNetwork {
     readonly graph: Record<string, Connection[]> = {};
@@ -109,41 +111,92 @@ export class TubeNetwork {
         return [...lines].sort();
     }
 
-    /** Find shortest-stop route using BFS (minimizes number of hops). */
-    findRoute(start: string, end: string): string[] | null {
+    /** Extra cost (minutes) applied whenever a route changes line at a station. */
+    static readonly INTERCHANGE_PENALTY = 5;
+
+    /**
+     * Find the fastest route using Dijkstra over (station, arrival line) states,
+     * charging an interchange penalty whenever the line changes. Plain BFS on
+     * stations alone would treat line changes as free and could "optimize" a
+     * 3-stop, 2-interchange route over a slower but direct single-line one.
+     *
+     * Returns the exact line ridden for each hop (not just the station names) so
+     * that leg-building never has to guess which line was used when several
+     * lines happen to connect the same pair of adjacent stations.
+     */
+    findRoute(start: string, end: string): Step[] | null {
         if (!this.graph[start] || !this.graph[end]) return null;
+        if (start === end) return [{ station: start, line: null }];
 
-        const queue: string[] = [start];
-        let head = 0;
-        const visited = new Set<string>([start]);
-        const parent: Record<string, string | null> = { [start]: null };
+        // `committedLine` is the last *real* line ridden (never 'Walk'), used only to
+        // decide whether boarding the next real line is a genuine interchange. Walking
+        // edges pass it through unchanged: their own time already prices in the
+        // transfer, so they neither trigger a penalty themselves nor shield a real
+        // line change on either side of them from being charged exactly once.
+        type State = { station: string; committedLine: string };
+        type PrevEntry = { state: State; edgeLine: string };
+        const stateKey = (s: State): string => JSON.stringify([s.station, s.committedLine]);
 
-        while (head < queue.length) {
-            const current = queue[head++];
-            if (current === end) break;
-            for (const [neighbor] of this.graph[current]) {
-                if (!visited.has(neighbor)) {
-                    visited.add(neighbor);
-                    parent[neighbor] = current;
-                    queue.push(neighbor);
+        const dist = new Map<string, number>();
+        const prev = new Map<string, PrevEntry | null>();
+        const stateOf = new Map<string, State>();
+
+        const startState: State = { station: start, committedLine: '' };
+        const startKey = stateKey(startState);
+        dist.set(startKey, 0);
+        prev.set(startKey, null);
+        stateOf.set(startKey, startState);
+
+        const frontier: string[] = [startKey];
+        let endKey: string | null = null;
+
+        while (frontier.length > 0) {
+            let minIdx = 0;
+            for (let i = 1; i < frontier.length; i++) {
+                if ((dist.get(frontier[i]) ?? Infinity) < (dist.get(frontier[minIdx]) ?? Infinity)) minIdx = i;
+            }
+            const currentKey = frontier.splice(minIdx, 1)[0];
+            const currentDist = dist.get(currentKey)!;
+            const current = stateOf.get(currentKey)!;
+
+            if (current.station === end) {
+                endKey = currentKey;
+                break;
+            }
+
+            for (const [neighbor, line, time] of this.graph[current.station] ?? []) {
+                const isWalk = line === 'Walk';
+                const newCommittedLine = isWalk ? current.committedLine : line;
+                const isRealChange = !isWalk && current.committedLine !== '' && line !== current.committedLine;
+                const penalty = isRealChange ? TubeNetwork.INTERCHANGE_PENALTY : 0;
+                const newDist = currentDist + time + penalty;
+                const neighborState: State = { station: neighbor, committedLine: newCommittedLine };
+                const neighborKey = stateKey(neighborState);
+                if (newDist < (dist.get(neighborKey) ?? Infinity)) {
+                    dist.set(neighborKey, newDist);
+                    prev.set(neighborKey, { state: current, edgeLine: line });
+                    stateOf.set(neighborKey, neighborState);
+                    frontier.push(neighborKey);
                 }
             }
         }
 
-        if (!(end in parent)) return null;
+        if (endKey === null) return null;
 
-        const path: string[] = [];
-        let node: string | null = end;
-        while (node !== null) {
-            path.push(node);
-            node = parent[node];
+        const path: Step[] = [];
+        let curKey: string | null = endKey;
+        while (curKey !== null) {
+            const curState = stateOf.get(curKey)!;
+            const p: PrevEntry | null = prev.get(curKey) ?? null;
+            path.push({ station: curState.station, line: p ? p.edgeLine : null });
+            curKey = p ? stateKey(p.state) : null;
         }
         path.reverse();
         return path;
     }
 
     /** Generate human-readable leg descriptions with line changes. */
-    getRouteDetails(route: string[]): string[] {
+    getRouteDetails(route: Step[]): string[] {
         if (!route || route.length < 2) return [];
 
         return this.getRouteLegs(route).map(([line, start, end, stops]) => {
@@ -152,41 +205,28 @@ export class TubeNetwork {
         });
     }
 
-    /** Return a structured list of legs as [line, startStation, endStation, stops]. */
-    getRouteLegs(route: string[]): Leg[] {
+    /**
+     * Return a structured list of legs as [line, startStation, endStation, stops].
+     * Uses the exact line each step recorded during the search — no re-derivation
+     * from the graph, so it can't disagree with the route the search actually found.
+     */
+    getRouteLegs(route: Step[]): Leg[] {
         if (!route || route.length < 2) return [];
 
-        const lineBetween = (a: string, b: string): string | null => {
-            for (const [neighbor, line] of this.graph[a]) {
-                if (neighbor === b) return line;
-            }
-            return null;
-        };
-
         const legs: Leg[] = [];
-        let currentLine: string | null = null;
         let legStartIdx = 0;
 
-        for (let i = 0; i < route.length - 1; i++) {
-            const a = route[i];
-            const b = route[i + 1];
-            const line = lineBetween(a, b);
-            if (line === null) continue;
-            if (currentLine === null) currentLine = line;
-            if (line !== currentLine) {
-                const start = route[legStartIdx];
-                const end = a;
-                const stops = i - legStartIdx;
-                legs.push([currentLine, start, end, stops]);
-                legStartIdx = i;
-                currentLine = line;
+        for (let i = 2; i <= route.length; i++) {
+            const legLine = route[legStartIdx + 1].line;
+            const edgeLine = i < route.length ? route[i].line : null;
+            if (edgeLine !== legLine) {
+                const start = route[legStartIdx].station;
+                const end = route[i - 1].station;
+                const stops = (i - 1) - legStartIdx;
+                legs.push([legLine ?? 'Unknown', start, end, stops]);
+                legStartIdx = i - 1;
             }
         }
-
-        const start = route[legStartIdx];
-        const end = route[route.length - 1];
-        const stops = (route.length - 1) - legStartIdx;
-        legs.push([currentLine ?? 'Unknown', start, end, stops]);
 
         return legs;
     }

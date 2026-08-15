@@ -289,7 +289,7 @@ Ready to plan your journey?"""
         if self.show_step_by_step.get():
             section_header = "\n" + ("=" * 50) + "\n" + "STEP-BY-STEP DIRECTIONS:\n\n"
             self.route_text.insert(tk.END, section_header)
-            for i, station in enumerate(route):
+            for i, (station, _line) in enumerate(route):
                 if i == 0:
                     self.route_text.insert(tk.END, f"🚀 START: Board at {station}\n")
                 elif i == len(route) - 1:

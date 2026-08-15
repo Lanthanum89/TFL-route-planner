@@ -132,44 +132,85 @@ class TubeNetwork:
     def get_station_lines(self, station: str) -> List[str]:
         return sorted({line for neighbor, line, time in self.graph.get(station, []) if line != 'Walk'})
 
-    def find_route(self, start: str, end: str) -> Optional[List[str]]:
-        """Find shortest-stop route using BFS (minimizes number of hops).
-        Later can be updated to minimize time or include live data.
+    # Extra cost (minutes) applied whenever a route changes line at a station.
+    INTERCHANGE_PENALTY = 5
+
+    def find_route(self, start: str, end: str) -> Optional[List[Tuple[str, Optional[str]]]]:
+        """Find the fastest route using Dijkstra over (station, arrival line) states,
+        charging an interchange penalty whenever the line changes. Plain BFS on
+        stations alone would treat line changes as free and could "optimize" a
+        3-stop, 2-interchange route over a slower but direct single-line one.
+
+        Returns a list of (station, line) pairs, where `line` is the line ridden
+        to reach that station (None for the starting station) — the exact line
+        used for each hop, so leg-building never has to guess which line was
+        used when several lines happen to connect the same pair of adjacent
+        stations.
         """
         if start not in self.graph or end not in self.graph:
             return None
-        
-        queue = deque([start])
-        visited = {start}
-        parent: Dict[str, Optional[str]] = {start: None}
-        
-        while queue:
-            current = queue.popleft()
-            if current == end:
+        if start == end:
+            return [(start, None)]
+
+        # `committed_line` is the last *real* line ridden (never 'Walk'), used only to
+        # decide whether boarding the next real line is a genuine interchange. Walking
+        # edges pass it through unchanged: their own time already prices in the
+        # transfer, so they neither trigger a penalty themselves nor shield a real
+        # line change on either side of them from being charged exactly once.
+        def key(station: str, committed_line: str) -> Tuple[str, str]:
+            return (station, committed_line)
+
+        dist: Dict[Tuple[str, str], int] = {key(start, ''): 0}
+        # Maps a state key to (predecessor state key, literal edge line used to arrive), or None for the start.
+        prev: Dict[Tuple[str, str], Optional[Tuple[Tuple[str, str], str]]] = {key(start, ''): None}
+        frontier: List[Tuple[str, str]] = [key(start, '')]
+        end_key: Optional[Tuple[str, str]] = None
+
+        while frontier:
+            min_idx = 0
+            for i in range(1, len(frontier)):
+                if dist.get(frontier[i], float('inf')) < dist.get(frontier[min_idx], float('inf')):
+                    min_idx = i
+            current_key = frontier.pop(min_idx)
+            current_dist = dist[current_key]
+            current_station, current_committed_line = current_key
+
+            if current_station == end:
+                end_key = current_key
                 break
-            for neighbor, line, time in self.graph[current]:
-                if neighbor not in visited:
-                    visited.add(neighbor)
-                    parent[neighbor] = current
-                    queue.append(neighbor)
-        
-        if end not in parent:
+
+            for neighbor, line, time in self.graph[current_station]:
+                is_walk = line == 'Walk'
+                new_committed_line = current_committed_line if is_walk else line
+                is_real_change = (not is_walk) and current_committed_line != '' and line != current_committed_line
+                penalty = self.INTERCHANGE_PENALTY if is_real_change else 0
+                new_dist = current_dist + time + penalty
+                neighbor_key = key(neighbor, new_committed_line)
+                if new_dist < dist.get(neighbor_key, float('inf')):
+                    dist[neighbor_key] = new_dist
+                    prev[neighbor_key] = (current_key, line)
+                    frontier.append(neighbor_key)
+
+        if end_key is None:
             return None
-        
+
         # Reconstruct path
-        path = []
-        node = end
-        while node is not None:
-            path.append(node)
-            node = parent[node]
+        path: List[Tuple[str, Optional[str]]] = []
+        cur_key: Optional[Tuple[str, str]] = end_key
+        while cur_key is not None:
+            station = cur_key[0]
+            entry = prev[cur_key]
+            edge_line = entry[1] if entry is not None else None
+            path.append((station, edge_line))
+            cur_key = entry[0] if entry is not None else None
         path.reverse()
         return path
-    
-    def get_route_details(self, route: List[str]) -> List[str]:
+
+    def get_route_details(self, route: List[Tuple[str, Optional[str]]]) -> List[str]:
         """Generate human-readable leg descriptions with line changes."""
         if not route or len(route) < 2:
             return []
-        
+
         # Build via structured legs, then render text
         legs = self.get_route_legs(route)
         details = []
@@ -180,44 +221,26 @@ class TubeNetwork:
                 details.append(f"Take {line} Line from {start} to {end} ({stops} stops)")
         return details
 
-    def get_route_legs(self, route: List[str]) -> List[Tuple[str, str, str, int]]:
+    def get_route_legs(self, route: List[Tuple[str, Optional[str]]]) -> List[Tuple[str, str, str, int]]:
         """Return a structured list of legs as (line, start_station, end_station, stops).
         Stops count is number of edges between start and end in that leg.
+        Uses the exact line each step recorded during the search — no re-derivation
+        from the graph, so it can't disagree with the route the search actually found.
         """
         if not route or len(route) < 2:
             return []
 
-        def line_between(a: str, b: str) -> Optional[str]:
-            for neighbor, line, _ in self.graph[a]:
-                if neighbor == b:
-                    return line
-            return None
-
         legs: List[Tuple[str, str, str, int]] = []
-        current_line: Optional[str] = None
         leg_start_idx = 0
 
-        for i in range(len(route) - 1):
-            a, b = route[i], route[i + 1]
-            line = line_between(a, b)
-            if line is None:
-                continue
-            if current_line is None:
-                current_line = line
-            if line != current_line:
-                # close previous leg ending at station a
-                start = route[leg_start_idx]
-                end = a
-                stops = i - leg_start_idx
-                legs.append((current_line, start, end, stops))
-                # start new leg from a
-                leg_start_idx = i
-                current_line = line
-
-        # finalize last leg to the last station
-        start = route[leg_start_idx]
-        end = route[-1]
-        stops = (len(route) - 1) - leg_start_idx
-        legs.append((current_line if current_line else 'Unknown', start, end, stops))
+        for i in range(2, len(route) + 1):
+            leg_line = route[leg_start_idx + 1][1]
+            edge_line = route[i][1] if i < len(route) else None
+            if edge_line != leg_line:
+                start = route[leg_start_idx][0]
+                end = route[i - 1][0]
+                stops = (i - 1) - leg_start_idx
+                legs.append((leg_line or 'Unknown', start, end, stops))
+                leg_start_idx = i - 1
 
         return legs
