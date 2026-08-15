@@ -1,5 +1,5 @@
 import './style.css';
-import { TubeNetwork } from './tube-network';
+import { TubeNetwork, type Step } from './tube-network';
 
 const network = new TubeNetwork();
 
@@ -71,11 +71,11 @@ function showNoRoute(): void {
     `;
 }
 
-function displayRoute(route: string[], fromStation: string, toStation: string): void {
+function displayRoute(route: Step[], fromStation: string, toStation: string): void {
     const totalStops = route.length - 1;
     const estimatedTime = totalStops * 2;
     const legs = network.getRouteLegs(route);
-    const interchangeCount = route.slice(1, -1).filter((s) => network.getStationLines(s).length > 1).length;
+    const interchangeCount = route.slice(1, -1).filter((s) => network.getStationLines(s.station).length > 1).length;
 
     resultsBody.innerHTML = '';
 
@@ -134,15 +134,15 @@ function displayRoute(route: string[], fromStation: string, toStation: string): 
         const timeline = document.createElement('div');
         timeline.className = 'timeline';
 
-        route.forEach((station, i) => {
+        route.forEach((step, i) => {
             const item = document.createElement('div');
-            const lines = network.getStationLines(station);
+            const lines = network.getStationLines(step.station);
             const isStart = i === 0;
             const isEnd = i === route.length - 1;
             const isInterchange = !isStart && !isEnd && lines.length > 1 && optInterchanges.checked;
 
             item.className = 'timeline-item' + (isStart ? ' start' : isEnd ? ' end' : isInterchange ? ' interchange' : '');
-            item.innerHTML = `<span class="dot"></span><span class="station-name">${station}</span>`;
+            item.innerHTML = `<span class="dot"></span><span class="station-name">${step.station}</span>`;
 
             if (isStart) {
                 item.innerHTML += '<div class="meta">🚀 Board here</div>';
