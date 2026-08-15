@@ -109,34 +109,70 @@ export class TubeNetwork {
         return [...lines].sort();
     }
 
-    /** Find shortest-stop route using BFS (minimizes number of hops). */
+    /** Extra cost (minutes) applied whenever a route changes line at a station. */
+    static readonly INTERCHANGE_PENALTY = 5;
+
+    /**
+     * Find the fastest route using Dijkstra over (station, arrival line) states,
+     * charging an interchange penalty whenever the line changes. Plain BFS on
+     * stations alone would treat line changes as free and could "optimize" a
+     * 3-stop, 2-interchange route over a slower but direct single-line one.
+     */
     findRoute(start: string, end: string): string[] | null {
         if (!this.graph[start] || !this.graph[end]) return null;
+        if (start === end) return [start];
 
-        const queue: string[] = [start];
-        let head = 0;
-        const visited = new Set<string>([start]);
-        const parent: Record<string, string | null> = { [start]: null };
+        type State = { station: string; line: string };
+        const stateKey = (s: State): string => JSON.stringify([s.station, s.line]);
 
-        while (head < queue.length) {
-            const current = queue[head++];
-            if (current === end) break;
-            for (const [neighbor] of this.graph[current]) {
-                if (!visited.has(neighbor)) {
-                    visited.add(neighbor);
-                    parent[neighbor] = current;
-                    queue.push(neighbor);
+        const dist = new Map<string, number>();
+        const prev = new Map<string, State | null>();
+        const stateOf = new Map<string, State>();
+
+        const startState: State = { station: start, line: '' };
+        const startKey = stateKey(startState);
+        dist.set(startKey, 0);
+        prev.set(startKey, null);
+        stateOf.set(startKey, startState);
+
+        const frontier: string[] = [startKey];
+        let endState: State | null = null;
+
+        while (frontier.length > 0) {
+            let minIdx = 0;
+            for (let i = 1; i < frontier.length; i++) {
+                if ((dist.get(frontier[i]) ?? Infinity) < (dist.get(frontier[minIdx]) ?? Infinity)) minIdx = i;
+            }
+            const currentKey = frontier.splice(minIdx, 1)[0];
+            const currentDist = dist.get(currentKey)!;
+            const current = stateOf.get(currentKey)!;
+
+            if (current.station === end) {
+                endState = current;
+                break;
+            }
+
+            for (const [neighbor, line, time] of this.graph[current.station] ?? []) {
+                const penalty = current.line !== '' && line !== current.line ? TubeNetwork.INTERCHANGE_PENALTY : 0;
+                const newDist = currentDist + time + penalty;
+                const neighborState: State = { station: neighbor, line };
+                const neighborKey = stateKey(neighborState);
+                if (newDist < (dist.get(neighborKey) ?? Infinity)) {
+                    dist.set(neighborKey, newDist);
+                    prev.set(neighborKey, current);
+                    stateOf.set(neighborKey, neighborState);
+                    frontier.push(neighborKey);
                 }
             }
         }
 
-        if (!(end in parent)) return null;
+        if (endState === null) return null;
 
         const path: string[] = [];
-        let node: string | null = end;
-        while (node !== null) {
-            path.push(node);
-            node = parent[node];
+        let cur: State | null = endState;
+        while (cur !== null) {
+            path.push(cur.station);
+            cur = prev.get(stateKey(cur)) ?? null;
         }
         path.reverse();
         return path;
@@ -156,11 +192,14 @@ export class TubeNetwork {
     getRouteLegs(route: string[]): Leg[] {
         if (!route || route.length < 2) return [];
 
-        const lineBetween = (a: string, b: string): string | null => {
+        const lineBetween = (a: string, b: string, preferredLine: string | null): string | null => {
+            let firstMatch: string | null = null;
             for (const [neighbor, line] of this.graph[a]) {
-                if (neighbor === b) return line;
+                if (neighbor !== b) continue;
+                if (firstMatch === null) firstMatch = line;
+                if (line === preferredLine) return line;
             }
-            return null;
+            return firstMatch;
         };
 
         const legs: Leg[] = [];
@@ -170,7 +209,7 @@ export class TubeNetwork {
         for (let i = 0; i < route.length - 1; i++) {
             const a = route[i];
             const b = route[i + 1];
-            const line = lineBetween(a, b);
+            const line = lineBetween(a, b, currentLine);
             if (line === null) continue;
             if (currentLine === null) currentLine = line;
             if (line !== currentLine) {

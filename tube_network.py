@@ -132,36 +132,59 @@ class TubeNetwork:
     def get_station_lines(self, station: str) -> List[str]:
         return sorted({line for neighbor, line, time in self.graph.get(station, []) if line != 'Walk'})
 
+    # Extra cost (minutes) applied whenever a route changes line at a station.
+    INTERCHANGE_PENALTY = 5
+
     def find_route(self, start: str, end: str) -> Optional[List[str]]:
-        """Find shortest-stop route using BFS (minimizes number of hops).
-        Later can be updated to minimize time or include live data.
+        """Find the fastest route using Dijkstra over (station, arrival line) states,
+        charging an interchange penalty whenever the line changes. Plain BFS on
+        stations alone would treat line changes as free and could "optimize" a
+        3-stop, 2-interchange route over a slower but direct single-line one.
         """
         if start not in self.graph or end not in self.graph:
             return None
-        
-        queue = deque([start])
-        visited = {start}
-        parent: Dict[str, Optional[str]] = {start: None}
-        
-        while queue:
-            current = queue.popleft()
-            if current == end:
+        if start == end:
+            return [start]
+
+        def key(station: str, line: str) -> Tuple[str, str]:
+            return (station, line)
+
+        dist: Dict[Tuple[str, str], int] = {key(start, ''): 0}
+        prev: Dict[Tuple[str, str], Optional[Tuple[str, str]]] = {key(start, ''): None}
+        frontier: List[Tuple[str, str]] = [key(start, '')]
+        end_key: Optional[Tuple[str, str]] = None
+
+        while frontier:
+            min_idx = 0
+            for i in range(1, len(frontier)):
+                if dist.get(frontier[i], float('inf')) < dist.get(frontier[min_idx], float('inf')):
+                    min_idx = i
+            current_key = frontier.pop(min_idx)
+            current_dist = dist[current_key]
+            current_station, current_line = current_key
+
+            if current_station == end:
+                end_key = current_key
                 break
-            for neighbor, line, time in self.graph[current]:
-                if neighbor not in visited:
-                    visited.add(neighbor)
-                    parent[neighbor] = current
-                    queue.append(neighbor)
-        
-        if end not in parent:
+
+            for neighbor, line, time in self.graph[current_station]:
+                penalty = self.INTERCHANGE_PENALTY if current_line != '' and line != current_line else 0
+                new_dist = current_dist + time + penalty
+                neighbor_key = key(neighbor, line)
+                if new_dist < dist.get(neighbor_key, float('inf')):
+                    dist[neighbor_key] = new_dist
+                    prev[neighbor_key] = current_key
+                    frontier.append(neighbor_key)
+
+        if end_key is None:
             return None
-        
+
         # Reconstruct path
         path = []
-        node = end
-        while node is not None:
-            path.append(node)
-            node = parent[node]
+        cur_key: Optional[Tuple[str, str]] = end_key
+        while cur_key is not None:
+            path.append(cur_key[0])
+            cur_key = prev[cur_key]
         path.reverse()
         return path
     
@@ -187,11 +210,16 @@ class TubeNetwork:
         if not route or len(route) < 2:
             return []
 
-        def line_between(a: str, b: str) -> Optional[str]:
+        def line_between(a: str, b: str, preferred_line: Optional[str]) -> Optional[str]:
+            first_match: Optional[str] = None
             for neighbor, line, _ in self.graph[a]:
-                if neighbor == b:
+                if neighbor != b:
+                    continue
+                if first_match is None:
+                    first_match = line
+                if line == preferred_line:
                     return line
-            return None
+            return first_match
 
         legs: List[Tuple[str, str, str, int]] = []
         current_line: Optional[str] = None
@@ -199,7 +227,7 @@ class TubeNetwork:
 
         for i in range(len(route) - 1):
             a, b = route[i], route[i + 1]
-            line = line_between(a, b)
+            line = line_between(a, b, current_line)
             if line is None:
                 continue
             if current_line is None:
